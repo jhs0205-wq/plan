@@ -56,17 +56,27 @@
         
         /* 일정 입력 폼 콘텐트 */
         .add-event-form { background: var(--card-bg); padding: 15px; border-radius: 16px; border: 1px solid var(--border); margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
-        .add-event-form h3 { font-size: 15px; margin-bottom: 10px; color: var(--text-main); }
-        .form-group { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
-        .form-inline { display: flex; gap: 8px; }
-        .form-inline input, .form-inline select { flex: 1; }
-        input, select { padding: 10px; border-radius: 8px; border: 1px solid var(--border); font-size: 14px; outline: none; }
-        .btn-add { background: #0a84ff; color: white; border: none; padding: 10px; border-radius: 8px; font-weight: bold; cursor: pointer; }
+        .add-event-form h3 { font-size: 15px; margin-bottom: 12px; color: var(--text-main); }
+        .form-group { display: flex; flex-direction: column; gap: 10px; }
+        .date-range-group { display: flex; align-items: center; gap: 5px; }
+        .date-range-group input { flex: 1; min-width: 0; }
+        .form-inline-select { display: flex; gap: 8px; }
+        .form-inline-select select { flex: 1; }
+        input, select { padding: 11px; border-radius: 8px; border: 1px solid var(--border); font-size: 14px; outline: none; background: #fff; }
+        .btn-add { background: #0a84ff; color: white; border: none; padding: 12px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 15px; }
 
         #calendar { background: #fff; color: #000; border-radius: 16px; padding: 12px; border: 1px solid var(--border); box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
         
-        /* 일요일 색상 및 공휴일 이벤트 스타일링 */
+        /* 🎨 빨간날/공휴일 스타일 커스텀 (네모박스 제거 및 숫자 변경) */
         .fc .fc-day-sun a { color: #ff6b6b !important; } /* 일요일 빨간색 */
+        
+        /* 공휴일(holiday 클래스) 날짜의 숫자를 빨간색으로 변경 */
+        .holiday-day .fc-daygrid-day-number { color: #ff6b6b !important; font-weight: bold; }
+        
+        /* 백그라운드 공휴일 텍스트를 숫자 밑에 이쁘게 노출하기 위한 설정 */
+        .fc-daygrid-bg-harness { overflow: visible !important; }
+        .holiday-text { font-size: 10px; color: #ff6b6b; font-weight: bold; text-align: center; margin-top: 22px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; padding: 0 2px; }
+        
         .fc-event { cursor: pointer; }
     </style>
 </head>
@@ -95,8 +105,12 @@
         <div class="add-event-form">
             <h3>✍️ 일정 직접 추가하기</h3>
             <div class="form-group">
-                <div class="form-inline">
-                    <input type="date" id="eventDate">
+                <div class="date-range-group">
+                    <input type="date" id="eventStartDate" title="출발일">
+                    <span style="color:var(--text-sub); font-size:14px; font-weight:bold;">~</span>
+                    <input type="date" id="eventEndDate" title="복귀일">
+                </div>
+                <div class="form-inline-select">
                     <select id="eventType">
                         <option value="#3498db">✈️ 휴가</option>
                         <option value="#fdcb6e">🎂 생일</option>
@@ -104,10 +118,10 @@
                         <option value="#e67e22">훈련</option>
                     </select>
                 </div>
-                <input type="text" id="eventTitle" placeholder="일정 이름 (예: 첫 정기휴가 시작!)">
+                <input type="text" id="eventTitle" placeholder="일정 이름 (예: 신병위로휴가)">
                 <button class="btn-add" onclick="addNewEvent()">달력에 추가하기</button>
             </div>
-            <p style="font-size: 11px; color: var(--text-sub); margin: 0;">💡 달력에 등록된 일정을 터치하면 삭제할 수 있습니다.</p>
+            <p style="font-size: 11px; color: var(--text-sub); margin-top: 8px; margin-bottom: 0;">💡 달력에 내가 등록한 휴가/생일을 터치하면 삭제할 수 있습니다.</p>
         </div>
 
         <div id="calendar"></div>
@@ -123,8 +137,11 @@
             renderDates();
             loadTimeTable(0);
             calculateDday();
-            // 오늘 날짜를 일정 입력 기본값으로 세팅
-            document.getElementById('eventDate').value = new Date().toISOString().substring(0, 10);
+            
+            // 오늘 날짜를 기간 입력 기본값으로 세팅
+            const todayStr = new Date().toISOString().substring(0, 10);
+            document.getElementById('eventStartDate').value = todayStr;
+            document.getElementById('eventEndDate').value = todayStr;
         };
 
         function renderDates() {
@@ -189,39 +206,42 @@
         // --- 2. 달력 및 한국 공휴일 파트 ---
         let calendar = null;
 
-        // 2026년 및 2027년 대한민국 고정/대체 공휴일 마스터 데이터
+        // 2026년 및 2027년 대한민국 공휴일 마스터 데이터 (숫자를 빨간색으로 바꾸기 위해 background 모드로 변경)
         const koreanHolidays = [
-            // 2026년 공휴일
-            { title: '🟥 신정', start: '2026-01-01', color: '#ff6b6b' },
-            { title: '🟥 설날 연휴', start: '2026-02-16', end: '2026-02-19', color: '#ff6b6b' },
-            { title: '🟥 삼일절 대체공휴일', start: '2026-03-02', color: '#ff6b6b' },
-            { title: '🟥 어린이날', start: '2026-05-05', color: '#ff6b6b' },
-            { title: '🟥 부처님오신날 대체휴일', start: '2026-05-25', color: '#ff6b6b' },
-            { title: '🟥 전국동시지방선거', start: '2026-06-03', color: '#ff6b6b' },
-            { title: '🟥 현충일', start: '2026-06-06', color: '#ff6b6b' },
-            { title: '🟥 제헌절', start: '2026-07-17', color: '#ff6b6b' },
-            { title: '🟥 광복절 대체공휴일', start: '2026-08-17', color: '#ff6b6b' },
-            { title: '🟥 추석 연휴', start: '2026-09-24', end: '2026-09-27', color: '#ff6b6b' },
-            { title: '🟥 개천절 대체공휴일', start: '2026-10-05', color: '#ff6b6b' },
-            { title: '🟥 한글날', start: '2026-10-09', color: '#ff6b6b' },
-            { title: '🟥 성탄절', start: '2026-12-25', color: '#ff6b6b' },
+            // 2026년
+            { title: '신정', start: '2026-01-01', display: 'background', classNames: ['holiday-marker'] },
+            { title: '설날 연휴', start: '2026-02-16', end: '2026-02-19', display: 'background', classNames: ['holiday-marker'] },
+            { title: '삼일절 대체휴일', start: '2026-03-02', display: 'background', classNames: ['holiday-marker'] },
+            { title: '어린이날', start: '2026-05-05', display: 'background', classNames: ['holiday-marker'] },
+            { title: '부처님오신날', start: '2026-05-24', display: 'background', classNames: ['holiday-marker'] },
+            { title: '대체공휴일', start: '2026-05-25', display: 'background', classNames: ['holiday-marker'] },
+            { title: '지방선거', start: '2026-06-03', display: 'background', classNames: ['holiday-marker'] },
+            { title: '현충일', start: '2026-06-06', display: 'background', classNames: ['holiday-marker'] },
+            { title: '제헌절', start: '2026-07-17', display: 'background', classNames: ['holiday-marker'] },
+            { title: '광복절 대체휴일', start: '2026-08-17', display: 'background', classNames: ['holiday-marker'] },
+            { title: '추석 연휴', start: '2026-09-24', end: '2026-09-27', display: 'background', classNames: ['holiday-marker'] },
+            { title: '개천절 대체휴일', start: '2026-10-05', display: 'background', classNames: ['holiday-marker'] },
+            { title: '한글날', start: '2026-10-09', display: 'background', classNames: ['holiday-marker'] },
+            { title: '성탄절', start: '2026-12-25', display: 'background', classNames: ['holiday-marker'] },
 
-            // 2027년 공휴일
-            { title: '🟥 신정', start: '2027-01-01', color: '#ff6b6b' },
-            { title: '🟥 설날 연휴', start: '2027-02-06', end: '2027-02-10', color: '#ff6b6b' },
-            { title: '🟥 삼일절', start: '2027-03-01', color: '#ff6b6b' },
-            { title: '🟥 어린이날', start: '2027-05-05', color: '#ff6b6b' },
-            { title: '🟥 부처님 오신 날', start: '2027-05-13', color: '#ff6b6b' },
-            { title: '🟥 현충일', start: '2027-06-06', color: '#ff6b6b' },
-            { title: '🟥 제헌절', start: '2027-07-17', color: '#ff6b6b' },
-            { title: '🟥 광복절 대체공휴일', start: '2027-08-16', color: '#ff6b6b' },
-            { title: '🟥 추석 연휴', start: '2027-09-14', end: '2027-09-17', color: '#ff6b6b' },
-            { title: '🟥 개천절 대체공휴일', start: '2027-10-04', color: '#ff6b6b' },
-            { title: '🟥 한글날 대체공휴일', start: '2027-10-11', color: '#ff6b6b' },
-            { title: '🟥 성탄절', start: '2027-12-25', color: '#ff6b6b' },
-            
-            // 전역일 고정 지정
-            { title: '🥇 영광의 전역일 🎉', start: '2027-07-25', color: '#2f3640' }
+            // 2027년
+            { title: '신정', start: '2027-01-01', display: 'background', classNames: ['holiday-marker'] },
+            { title: '설날 연휴', start: '2027-02-06', end: '2027-02-10', display: 'background', classNames: ['holiday-marker'] },
+            { title: '삼일절', start: '2027-03-01', display: 'background', classNames: ['holiday-marker'] },
+            { title: '어린이날', start: '2027-05-05', display: 'background', classNames: ['holiday-marker'] },
+            { title: '부처님오신날', start: '2027-05-13', display: 'background', classNames: ['holiday-marker'] },
+            { title: '현충일', start: '2027-06-06', display: 'background', classNames: ['holiday-marker'] },
+            { title: '제헌절', start: '2027-07-17', display: 'background', classNames: ['holiday-marker'] },
+            { title: '광복절 대체휴일', start: '2027-08-16', display: 'background', classNames: ['holiday-marker'] },
+            { title: '추석 연휴', start: '2027-09-14', end: '2027-09-17', display: 'background', classNames: ['holiday-marker'] },
+            { title: '개천절 대체휴일', start: '2027-10-04', display: 'background', classNames: ['holiday-marker'] },
+            { title: '한글날 대체휴일', start: '2027-10-11', display: 'background', classNames: ['holiday-marker'] },
+            { title: '성탄절', start: '2027-12-25', display: 'background', classNames: ['holiday-marker'] }
+        ];
+
+        // 전역일 전용 바 (고정 막대 형태 유지)
+        const dischargeEvent = [
+            { id: 'discharge-day', title: '🥇 전역일 🎉', start: '2027-07-25', color: '#2f3640' }
         ];
 
         function switchPage(p) {
@@ -239,64 +259,90 @@
         // 달력 초기 구동 및 이벤트 결합
         function initCalendar() {
             const calendarEl = document.getElementById('calendar');
-            
-            // 기존에 직접 저장했던 커스텀 일정 가져오기
             const customEvents = JSON.parse(localStorage.getItem('my_custom_events')) || [];
-            // 공휴일 정보와 커스텀 일정 병합
-            const totalEvents = [...koreanHolidays, ...customEvents];
+            const totalEvents = [...koreanHolidays, ...dischargeEvent, ...customEvents];
 
             calendar = new FullCalendar.Calendar(calendarEl, {
                 initialView: 'dayGridMonth',
                 locale: 'ko',
                 height: 'auto',
                 events: totalEvents,
-                // 달력 내 일정을 클릭했을 때 삭제 기능 실행
+                
+                // 🛠️ 빨간날 숫자를 제어하고 그 밑에 텍스트를 넣는 핵심 함수
+                dayCellDidMount: function(info) {
+                    // 해당 날짜에 공휴일(holiday-marker) 클래스가 박혀있는지 감지
+                    const hasHoliday = info.el.querySelector('.holiday-marker');
+                    if (hasHoliday) {
+                        info.el.classList.add('holiday-day'); // 숫자를 빨간색으로 바꾸는 스타일 적용
+                    }
+                },
+
+                // 백그라운드 공휴일의 이름을 렌더링 영역에 직접 추가
+                eventContent: function(arg) {
+                    if (arg.event.display === 'background' && arg.event.classNames.includes('holiday-marker')) {
+                        let textEl = document.createElement('span');
+                        textEl.className = 'holiday-text';
+                        textEl.innerText = arg.event.title;
+                        return { domNodes: [textEl] };
+                    }
+                },
+
+                // 일정 터치 시 삭제 기능 (내가 직접 추가한 휴가/생일만 삭제 가능)
                 eventClick: function(info) {
-                    if (info.event.title.startsWith("🟥") || info.event.title.includes("전역일")) {
-                        alert("국방부 지정 공휴일 및 전역일은 삭제할 수 없습니다. 🫡");
-                        return;
+                    if (info.event.display === 'background' || info.event.id === 'discharge-day') {
+                        return; // 국가 공휴일이나 전역일은 터치 무시
                     }
                     if(confirm(`[${info.event.title}] 일정을 달력에서 삭제할까요?`)) {
-                        removeEventFromStorage(info.event.title, info.event.startStr);
+                        removeEventFromStorage(info.event.title, info.event.startStr, info.event.endStr);
                     }
                 }
             });
         }
 
-        // 새로운 커스텀 일정 등록 함수
+        // 새로운 커스텀 일정 등록 함수 (출발일 ~ 복귀일 연동)
         function addNewEvent() {
-            const date = document.getElementById('eventDate').value;
+            const start = document.getElementById('eventStartDate').value;
+            let end = document.getElementById('eventEndDate').value;
             const color = document.getElementById('eventType').value;
             const title = document.getElementById('eventTitle').value.trim();
 
             if(!title) {
-                alert("일정 내용을 입력해 주세요!");
+                alert("일정 이름을 입력해 주세요!");
                 return;
             }
 
-            const newEvent = { title: title, start: date, color: color };
+            if(new Date(start) > new Date(end)) {
+                alert("복귀일이 출발일보다 빠를 수 없습니다!");
+                return;
+            }
 
-            // 기존 로컬스토리지 목록에 추가 보관
+            // 💡 FullCalendar 특성상 '바 형태(기간)'로 온전하게 채우려면 복귀일에 +1일을 더해줘야 정상 표기됩니다.
+            let endDateObj = new Date(end);
+            endDateObj.setDate(endDateObj.getDate() + 1);
+            const finalEndStr = endDateObj.toISOString().substring(0, 10);
+
+            const newEvent = { title: title, start: start, end: finalEndStr, color: color };
+
+            // 로컬스토리지 저장
             const customEvents = JSON.parse(localStorage.getItem('my_custom_events')) || [];
             customEvents.push(newEvent);
             localStorage.setItem('my_custom_events', JSON.stringify(customEvents));
 
-            // 달력 실시간 업데이트
+            // 달력에 즉시 렌더링
             calendar.addEvent(newEvent);
             document.getElementById('eventTitle').value = '';
-            alert(`달력에 '${title}' 일정이 등록되었습니다!`);
+            alert(`달력에 '${title}' 일정이 정상 등록되었습니다! ✈️`);
         }
 
         // 커스텀 일정 삭제 처리 함수
-        function removeEventFromStorage(title, startStr) {
+        function removeEventFromStorage(title, startStr, endStr) {
             let customEvents = JSON.parse(localStorage.getItem('my_custom_events')) || [];
-            // 제목과 날짜가 일치하는 이벤트를 제외하고 필터링
             customEvents = customEvents.filter(e => !(e.title === title && e.start === startStr));
             localStorage.setItem('my_custom_events', JSON.stringify(customEvents));
             
-            // 달력 리로드
+            // 달력 리프레시
             calendar.removeAllEvents();
-            calendar.addEventSource([...koreanHolidays, ...customEvents]);
+            calendar.addEventSource([...koreanHolidays, ...dischargeEvent, ...customEvents]);
         }
 
         function calculateDday() {
