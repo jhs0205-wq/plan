@@ -2,73 +2,194 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>나만의 군인 플래너</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>타임테이블 플래너</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
+    
     <style>
-        body { font-family: 'Arial', sans-serif; background: #f4f7f6; padding: 20px; }
-        .nav { margin-bottom: 20px; }
-        .page { display: none; }
-        .active { display: block; }
-        .week-container { display: flex; gap: 10px; }
-        .day-card { background: white; padding: 15px; border-radius: 8px; width: 14%; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        .todo-area { min-height: 15px; border-bottom: 1px dashed #ccc; padding: 5px; margin-bottom: 10px; outline: none; }
-        button { cursor: pointer; padding: 8px 12px; background: #2ecc71; color: white; border: none; border-radius: 4px; }
+        :root {
+            --bg-color: #f5f6fa;       /* 밝은 회색 바탕 */
+            --card-bg: #ffffff;        /* 흰색 카드 배경 */
+            --text-main: #2f3640;      /* 짙은 차콜색 글씨 */
+            --text-sub: #7f8c8d;       /* 흐린 회색 글씨 */
+            --accent: #4bc0c0;         /* 메인 포인트 (민트) */
+            --border: #dcdde1;         /* 테두리 선 */
+        }
+
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body { font-family: -apple-system, sans-serif; background: var(--bg-color); color: var(--text-main); margin: 0; padding: 0; overflow-x: hidden; }
+
+        /* 상단 네비게이션 */
+        .nav { display: flex; background: var(--card-bg); padding: 10px; border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100; }
+        .nav button { flex: 1; background: none; border: none; color: var(--text-sub); padding: 12px; font-size: 16px; font-weight: bold; cursor: pointer; }
+        .nav button.active { color: var(--accent); border-bottom: 3px solid var(--accent); }
+
+        .page { display: none; padding: 15px; }
+        .page.active { display: block; }
+
+        /* 1페이지: 타임테이블 날짜 선택바 */
+        .date-scroller { display: flex; overflow-x: auto; gap: 12px; padding: 10px 0; margin-bottom: 15px; scrollbar-width: none; }
+        .date-scroller::-webkit-scrollbar { display: none; }
+        .date-item { min-width: 60px; text-align: center; padding: 12px 8px; border-radius: 12px; background: var(--card-bg); border: 1px solid var(--border); box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+        .date-item.selected { background: var(--accent); border-color: var(--accent); }
+        .date-item span { display: block; }
+        .date-num { font-size: 18px; font-weight: bold; }
+        .date-day { font-size: 12px; color: var(--text-sub); }
+        .selected .date-day, .selected .date-num { color: #ffffff; }
+
+        /* 타임테이블 스타일 */
+        .timetable { background: var(--card-bg); border-radius: 16px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border: 1px solid var(--border); }
+        .time-row { display: flex; border-bottom: 1px solid var(--border); }
+        .time-row:last-child { border-bottom: none; }
+        .time-label { width: 65px; padding: 18px 10px; font-size: 13px; color: var(--text-sub); text-align: right; border-right: 1px solid var(--border); background: #fafafa; font-weight: 500; }
+        .time-content { flex: 1; padding: 15px; font-size: 15px; min-height: 55px; outline: none; white-space: pre-wrap; background: #ffffff; color: var(--text-main); }
+        .time-content:focus { background: #fdfdfd; }
+        .time-content:empty:before { content: "일정을 입력하세요"; color: #b2bec3; }
+
+        /* 하단 고정 버튼 */
+        .action-bar { display: flex; gap: 10px; margin-top: 20px; margin-bottom: 30px; }
+        .btn { flex: 1; padding: 15px; border-radius: 12px; border: none; font-weight: bold; font-size: 15px; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        .btn-copy { background: #eccc68; color: #2f3640; }
+        .btn-save { background: var(--accent); color: #fff; }
+
+        /* 2페이지: 달력/디데이 */
+        #dday-card { background: var(--card-bg); padding: 20px; border-radius: 16px; text-align: center; margin-bottom: 15px; border: 1px solid var(--border); box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        #dday-card h2 { color: #ff6b6b; margin: 0; font-size: 26px; font-weight: bold; }
+        #calendar { background: #fff; color: #000; border-radius: 16px; padding: 15px; border: 1px solid var(--border); box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        
+        /* 달력 내부 커스텀 */
+        .fc { --fc-bg-event-color: #4bc0c0; --fc-border-color: #eeeeee; }
+        .fc-theme-standard th { background: #fafafa; padding: 8px 0; }
     </style>
 </head>
 <body>
 
-    <!-- 탭 메뉴 -->
     <div class="nav">
-        <button onclick="switchPage('page1')">📅 주간 계획</button>
-        <button onclick="switchPage('page2')">📆 달력 & 전역일</button>
+        <button id="nav-p1" class="active" onclick="switchPage('page1')">📅 플랜</button>
+        <button id="nav-p2" onclick="switchPage('page2')">📆 달력</button>
     </div>
 
-    <!-- 1페이지: 주간 계획 -->
     <div id="page1" class="page active">
-        <h2>이번 주 계획</h2>
-        <div style="margin-bottom: 15px;">
-            <button onclick="copyDefaultRoutine()">📋 기본 루틴 복사해오기</button>
-            <button onclick="saveWeeklyPlan()" style="background: #3498db;">💾 변경사항 저장</button>
-        </div>
-        <div class="week-container">
-            <!-- 월요일 예시 (화~일요일도 동일한 구조로 반복 생성) -->
-            <div class="day-card">
-                <h3>월요일</h3>
-                <div id="plan-mon" class="todo-area" contenteditable="true">여기를 눌러 계획을 작성하세요.</div>
-            </div>
-            <!-- 반복... -->
+        <div class="date-scroller" id="dateScroller"></div>
+
+        <div class="timetable" id="timetableArea"></div>
+
+        <div class="action-bar">
+            <button class="btn btn-copy" onclick="copyRoutine()">📋 루틴 복사</button>
+            <button class="btn btn-save" onclick="saveData()">💾 저장하기</button>
         </div>
     </div>
 
-    <!-- 2페이지: 달력 -->
     <div id="page2" class="page">
-        <h2>달력 및 주요 일정</h2>
-        <div id="d-day-zone" style="font-size: 20px; font-weight: bold; color: #e74c3c; margin-bottom: 20px;"></div>
-        <!-- 여기에 FullCalendar 라이브러리가 렌더링될 영역 배치 -->
-        <div id="calendar-view" style="background: white; padding: 20px; border-radius: 8px;">[달력 구동 영역]</div>
+        <div id="dday-card">
+            <p style="color: var(--text-sub); margin-bottom: 5px; font-weight: bold;">🎖️ 전역까지</p>
+            <h2 id="ddayText">D-Day 계산 중...</h2>
+        </div>
+        <div id="calendar"></div>
     </div>
 
     <script>
-        // 페이지 전환 함수
-        function switchPage(pageId) {
-            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-            document.getElementById(pageId).classList.add('active');
+        let currentIdx = 0;
+        const days = ['일','월','화','수','목','금','토'];
+        const hours = [6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,0];
+        
+        window.onload = () => {
+            renderDates();
+            loadTimeTable(0);
+            calculateDday();
+        };
+
+        function renderDates() {
+            const scroller = document.getElementById('dateScroller');
+            for(let i=0; i<7; i++) {
+                const date = new Date();
+                date.setDate(date.getDate() + i);
+                const dayName = days[date.getDay()];
+                const dateNum = date.getDate();
+
+                const div = document.createElement('div');
+                div.className = `date-item ${i === 0 ? 'selected' : ''}`;
+                div.id = `date-${i}`;
+                div.onclick = () => loadTimeTable(i);
+                div.innerHTML = `<span class="date-day">${dayName}</span><span class="date-num">${dateNum}</span>`;
+                scroller.appendChild(div);
+            }
         }
 
-        // 기본 루틴 복사 기능
-        function copyDefaultRoutine() {
-            const defaultRoutine = "💪 개인 정비 & 연경(개인운동)\n📚 공부 2시간\n🏃 3km 뜀걸음";
-            document.getElementById('plan-mon').innerText = defaultRoutine;
-            // 나머지 요일도 동일하게 매핑 가능
+        function loadTimeTable(idx) {
+            currentIdx = idx;
+            document.querySelectorAll('.date-item').forEach(d => d.classList.remove('selected'));
+            document.getElementById(`date-${idx}`).classList.add('selected');
+
+            const area = document.getElementById('timetableArea');
+            area.innerHTML = '';
+
+            hours.forEach(h => {
+                const row = document.createElement('div');
+                row.className = 'time-row';
+                const label = h === 0 ? '24:00' : `${h}:00`;
+                
+                const savedData = localStorage.getItem(`plan-${idx}-${h}`) || "";
+
+                row.innerHTML = `
+                    <div class="time-label">${label}</div>
+                    <div class="time-content" contenteditable="true" id="content-${h}">${savedData}</div>
+                `;
+                area.appendChild(row);
+            });
         }
 
-        // 로컬 스토리지 저장 기능
-        function saveWeeklyPlan() {
-            const monPlan = document.getElementById('plan-mon').innerText;
-            localStorage.setItem('mon_plan', monPlan);
-            alert('계획이 저장되었습니다!');
+        function saveData() {
+            hours.forEach(h => {
+                const text = document.getElementById(`content-${h}`).innerText;
+                localStorage.setItem(`plan-${currentIdx}-${h}`, text);
+            });
+            alert("오늘의 타임테이블 일정이 저장되었습니다! 💾");
         }
 
-        // 초기 데이터 로드 및 D-Day 계산 로직을 여기에 추가 가능
+        function copyRoutine() {
+            if(!confirm("현재 화면에 입력된 일과를 이번 주 전체 날짜에 똑같이 복사할까요?")) return;
+            const currentData = hours.map(h => document.getElementById(`content-${h}`).innerText);
+            
+            for(let i=0; i<7; i++) {
+                hours.forEach((h, index) => {
+                    localStorage.setItem(`plan-${i}-${h}`, currentData[index]);
+                });
+            }
+            alert("모든 날짜에 루틴이 복사되었습니다. 📋");
+        }
+
+        let calendar = null;
+        function switchPage(p) {
+            document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
+            document.querySelectorAll('.nav button').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(p).classList.add('active');
+            if(p === 'page1') document.getElementById('nav-p1').classList.add('active');
+            else {
+                document.getElementById('nav-p2').classList.add('active');
+                if(!calendar) initCalendar();
+                setTimeout(() => calendar.render(), 100);
+            }
+        }
+
+        function initCalendar() {
+            const calendarEl = document.getElementById('calendar');
+            calendar = new FullCalendar.Calendar(calendarEl, {
+                initialView: 'dayGridMonth',
+                locale: 'ko',
+                height: 'auto',
+                events: [{ title: '🥇 전역일', start: '2027-07-25', color: '#ff6b6b' }]
+            });
+        }
+
+        function calculateDday() {
+            const target = new Date('2027-07-25');
+            const today = new Date();
+            const diff = target - today;
+            const dday = Math.ceil(diff / (1000 * 60 * 60 * 24));
+            document.getElementById('ddayText').innerText = `D-${dday}일`;
+        }
     </script>
 </body>
 </html>
